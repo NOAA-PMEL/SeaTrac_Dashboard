@@ -1,0 +1,8 @@
+--extra-index-url https://dash-temp.pmel.noaa.gov/packages
+dash==3.2.0
+pandas==2.3.1
+dash-design-kit==2.2.2
+gunicorn==21.0.0
+celery==5.4.0
+dash-ag-grid==32.3.1
+redis==5.2.1
