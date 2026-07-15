@@ -87,7 +87,7 @@ app.layout = ddk.App(
             style={"height":"80vh","overflow-y":"scroll"}
         ),
     ],
-    show_editor=True,
+    show_editor=False,
 )
 
 @app.callback(
