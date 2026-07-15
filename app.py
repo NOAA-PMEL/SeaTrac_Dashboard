@@ -1,3 +1,4 @@
+from dash.html import Label
 import dash_design_kit as ddk
 import numpy as np
 import pandas as pd
@@ -5,16 +6,68 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from dash import Dash, Input, Output, callback, dcc, no_update
 import plotly.express as px
+from urllib.parse import quote
 
 app = Dash(__name__)
 server = app.server
 
+row_height = 350
 # Get colors from color pallets 
 colors = px.colors.qualitative.Plotly
+url_df = pd.read_csv('http://auk.pmel.noaa.gov:8080/erddap/search/index.csv?page=1&itemsPerPage=1000&searchFor=ST01')
+#print(url_df)
+urls = url_df['tabledap'].to_list()
+#print(urls)
+'''
+url1 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_ATRH_12345.csv?time%2CAir_Temp%2CAir_Temp_Std%2CRH%2CRH_Std&time%3E=2026-07-04T03%3A00%3A00Z&time%3C=2026-07-06T09%3A00%3A00Z&orderBy(%22time%22)'
+url2 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_baro_10943195.csv' # pressure
+url3 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_ST01.csv'         # gps
+url4 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_LWR_240694.csv'   # lwr
+url5 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_SSC_12345.csv'    # sst
+url6 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_SWR_247283.csv'   # swr
+url7 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_WIND_99999.csv'   # wind
+#urls = [url2, url3, url4, url5, url6, url7]
+'''
+### Original code for single url / table ###########
+#df = pd.read_csv(url1, skiprows=[1])
+#var_options = df.columns #variables for graph selector dropdown
+####################################################
 
-url = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_ATRH_12345.csv?time%2CAir_Temp%2CAir_Temp_Std%2CRH%2CRH_Std&time%3E=2026-07-04T03%3A00%3A00Z&time%3C=2026-07-06T09%3A00%3A00Z&orderBy(%22time%22)'
-df = pd.read_csv(url, skiprows=[1])
-var_options = df.columns #variables for graph selector dropdown
+#df = pd.read_csv(url1, skiprows=[1])
+var_dict = {}
+var_options = []
+unit_dict = {}
+
+for url in urls:
+    info_url = url.replace('tabledap','info')
+    info_url = info_url+'/index.csv'
+    info_df = pd.read_csv(info_url)
+    var_df = info_df.loc[info_df['Row Type']=='variable']
+    ## Build dictionary - relationship between the variables and the urls
+    for var in var_df['Variable Name'].to_list():
+        var_units = info_df.loc[(info_df['Row Type']=='attribute') & (info_df['Variable Name']==var) & (info_df['Attribute Name']=='units')]
+        #units = var_units['Value'].astype(str)
+        if not var_units.empty:
+            units = str(var_units['Value'].iloc[0])
+            unit_dict[var] = units
+            
+        var_dict[var] = url
+        if var.lower() != 'time':
+            var_options.append({'label': var, 'value': var}) # Drop down options
+    #print(var_df)
+    
+    #var_options = df.columns #variables for graph selector dropdown
+
+### Example from google ########################
+#new_columns = {}
+#for i in range(len(urls)):
+#    col_name = f"New_Col_{i}"
+#    # Example logic: multiply column A by the loop index
+#    new_columns[col_name] = df["A"] * i
+    
+#df_new_cols = pd.DataFrame(new_columns)
+#df = pd.concat([df, df_new_cols], axis=1)
+####################################################
 
 app.layout = ddk.App(
     [
@@ -25,9 +78,13 @@ app.layout = ddk.App(
             ]
         ),
         #ddk.ControlCard(ddk.ControlItem(dcc.Dropdown(id="variable",options=var_options,multi=True))),
-        ddk.ControlCard(ddk.ControlItem(dcc.Dropdown(id="variable",options=var_options,multi=True))),
+        ddk.ControlCard(orientation='horizontal', width=1, children=[
+            ddk.ControlItem(dcc.Dropdown(id="variable",options=var_options,multi=True), width=0.5),
+            ddk.ControlItem(dcc.DatePickerRange(id='datepicker', min_date_allowed='2026-06-01'), width=0.5)   
+        ]),
         ddk.Card(
             children=ddk.Graph(id="graph"),
+            style={"height":"80vh","overflow-y":"scroll"}
         ),
     ],
     show_editor=True,
@@ -35,31 +92,41 @@ app.layout = ddk.App(
 
 @app.callback(
     [Output("graph","figure")],
-    [Input("variable","value")]
+    [Input("variable","value"), Input("datepicker","start_date"), Input("datepicker","end_date")]
 )
 
-def update_plot(in_variable):
-    if not in_variable:
+def update_plot(in_variable,in_start_date,in_end_date):
+    if not in_variable or not in_start_date or not in_end_date:
         return no_update
         
     #print(in_variable)
     
     # Create figure with secondary y-axis
-    fig = make_subplots(cols=1,rows=len(in_variable))
+    row_heights = [row_height-3]*len(in_variable)
+    fig = make_subplots(cols=1,rows=len(in_variable),shared_xaxes=True,row_heights=row_heights)
+    #fig = make_subplots(cols=1,rows=len(in_variable),shared_xaxes=True,row_heights=row_heights, vertical_spacing = .1/len(in_variable))
     count = 1
     
-    for var in in_variable:    
+    for var in in_variable: 
+        url = var_dict[var]
+        
+        url = url + '.csv?time,' + var + quote('&time>=' + in_start_date + '&time<=' + in_end_date)
+        print(url)
+        df = pd.read_csv(url, skiprows=[1])
+        
         # Add traces, setting one to the secondary axis
         fig.add_trace(
             go.Scatter(x=df['time'], y=df[var], name=var, line=dict(color=colors[count % len(colors)])),
             secondary_y=False, col=1, row=count
         )
-        
-        fig.update_yaxes(title_text=var, row=count, col=1)
-        
+        title = var 
+        if var in unit_dict:
+            title = title + ' (' + unit_dict[var] + ')'
+            
+        fig.update_yaxes(title_text=title, row=count, col=1)
+        fig.update_xaxes(showticklabels=True)
         fig.update_layout(
             title_text="Data from TELOST01",
-            height = 200*(count+1),
             yaxis=dict(
                 #title=var, #Only adds over top subplot
                 title_font_color="#1f77b4",
@@ -71,6 +138,8 @@ def update_plot(in_variable):
         )
         count += 1
 
+    fig.update_layout(height = row_height*len(in_variable))
+    
     return [fig]
 
 
