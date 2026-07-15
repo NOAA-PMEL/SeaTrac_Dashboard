@@ -15,25 +15,8 @@ row_height = 350
 # Get colors from color pallets 
 colors = px.colors.qualitative.Plotly
 url_df = pd.read_csv('http://auk.pmel.noaa.gov:8080/erddap/search/index.csv?page=1&itemsPerPage=1000&searchFor=ST01')
-#print(url_df)
 urls = url_df['tabledap'].to_list()
-#print(urls)
-'''
-url1 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_ATRH_12345.csv?time%2CAir_Temp%2CAir_Temp_Std%2CRH%2CRH_Std&time%3E=2026-07-04T03%3A00%3A00Z&time%3C=2026-07-06T09%3A00%3A00Z&orderBy(%22time%22)'
-url2 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_baro_10943195.csv' # pressure
-url3 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_ST01.csv'         # gps
-url4 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_LWR_240694.csv'   # lwr
-url5 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_SSC_12345.csv'    # sst
-url6 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_SWR_247283.csv'   # swr
-url7 = 'http://auk.pmel.noaa.gov:8080/erddap/tabledap/TELOST01_WIND_99999.csv'   # wind
-#urls = [url2, url3, url4, url5, url6, url7]
-'''
-### Original code for single url / table ###########
-#df = pd.read_csv(url1, skiprows=[1])
-#var_options = df.columns #variables for graph selector dropdown
-####################################################
 
-#df = pd.read_csv(url1, skiprows=[1])
 var_dict = {}
 var_options = []
 unit_dict = {}
@@ -54,9 +37,6 @@ for url in urls:
         var_dict[var] = url
         if var.lower() != 'time':
             var_options.append({'label': var, 'value': var}) # Drop down options
-    #print(var_df)
-    
-    #var_options = df.columns #variables for graph selector dropdown
 
 ### Example from google ########################
 #new_columns = {}
@@ -98,8 +78,6 @@ app.layout = ddk.App(
 def update_plot(in_variable,in_start_date,in_end_date):
     if not in_variable or not in_start_date or not in_end_date:
         return no_update
-        
-    #print(in_variable)
     
     # Create figure with secondary y-axis
     row_heights = [row_height-3]*len(in_variable)
@@ -109,12 +87,11 @@ def update_plot(in_variable,in_start_date,in_end_date):
     
     for var in in_variable: 
         url = var_dict[var]
-        
-        url = url + '.csv?time,' + var + quote('&time>=' + in_start_date + '&time<=' + in_end_date)
-        print(url)
+        # Fileter the URL
+        url = url + '.csv?time,' + var + quote('&time>=' + in_start_date + '&time<=' + in_end_date + '&orderBy("time")')
         df = pd.read_csv(url, skiprows=[1])
         
-        # Add traces, setting one to the secondary axis
+        # Add traces
         fig.add_trace(
             go.Scatter(x=df['time'], y=df[var], name=var, line=dict(color=colors[count % len(colors)])),
             secondary_y=False, col=1, row=count
@@ -141,7 +118,6 @@ def update_plot(in_variable,in_start_date,in_end_date):
     fig.update_layout(height = row_height*len(in_variable))
     
     return [fig]
-
 
 if __name__ == "__main__":
     app.run(debug=True,port = 8050)
