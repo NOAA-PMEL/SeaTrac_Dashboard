@@ -20,6 +20,7 @@ urls = url_df['tabledap'].to_list()
 var_dict = {}
 var_options = []
 unit_dict = {}
+label_dict = {}
 
 for url in urls:
     info_url = url.replace('tabledap','info')
@@ -29,14 +30,18 @@ for url in urls:
     ## Build dictionary - relationship between the variables and the urls
     for var in var_df['Variable Name'].to_list():
         var_units = info_df.loc[(info_df['Row Type']=='attribute') & (info_df['Variable Name']==var) & (info_df['Attribute Name']=='units')]
-        #units = var_units['Value'].astype(str)
         if not var_units.empty:
             units = str(var_units['Value'].iloc[0])
             unit_dict[var] = units
+        
+        var_label = info_df.loc[(info_df['Row Type']=='attribute') & (info_df['Variable Name']==var) & (info_df['Attribute Name']=='long_name')]
+        if not var_label.empty:
+            labels = str(var_label['Value'].iloc[0] + ' (' + url[55:] + ')')
+            label_dict[var] = labels
             
         var_dict[var] = url
         if var.lower() != 'time':
-            var_options.append({'label': var, 'value': var}) # Drop down options
+            var_options.append({'label': label_dict[var], 'value': var}) # Drop down options
 
 ### Example from google ########################
 #new_columns = {}
